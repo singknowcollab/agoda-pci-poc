@@ -1,5 +1,5 @@
 /getClientSideAssets
-  Access-Control-Allow-Origin: __VICTIM_URL__
+  Access-Control-Allow-Origin: https://agoda-poc-victim.netlify.app
   Access-Control-Allow-Credentials: true
 
 /payload.js

@@ -84,7 +84,7 @@
 
   <div class="col">
     <div class="iframe-label">&darr; iframe running Agoda's real, unmodified <code>index-v4.html</code> logic</div>
-    <iframe id="victim" src="__VICTIM_URL__"></iframe>
+    <iframe id="victim" src="https://agoda-poc-victim.netlify.app"></iframe>
   </div>
 </div>
 
@@ -97,7 +97,7 @@
 </footer>
 
 <script>
-  var VICTIM_URL = "__VICTIM_URL__";
+  var VICTIM_URL = "https://agoda-poc-victim.netlify.app";
   var logEl = document.getElementById('log');
   var statusEl = document.getElementById('status');
   var captureEl = document.getElementById('capture');

